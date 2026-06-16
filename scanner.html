@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard AI — Network Scanner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+  :root {
+    --bg:        #050a0e;
+    --panel:     #0a1520;
+    --border:    #0d2a3a;
+    --accent:    #00e5ff;
+    --accent2:   #00ff9d;
+    --warn:      #ffb300;
+    --danger:    #ff3d5a;
+    --text:      #b0d4e0;
+    --dim:       #3a5a6a;
+    --scan-line: rgba(0,229,255,0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scan-line effect */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 3px,
+      var(--scan-line) 3px, var(--scan-line) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, #0a1a28 0%, #050a0e 100%);
+  }
+
+  .logo { font-family: 'Rajdhani', sans-serif; font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: 2px; }
+  .logo span { color: var(--accent2); }
+  .breadcrumb { color: var(--dim); font-size: 11px; margin-left: auto; }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+
+  .container { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+
+  /* ── Top controls ── */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .subnet-input {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 14px;
+    width: 200px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .subnet-input:focus { border-color: var(--accent); }
+
+  .btn {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    padding: 8px 20px;
+    border: 1px solid;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    background: transparent;
+  }
+  .btn-scan  { border-color: var(--accent);  color: var(--accent);  }
+  .btn-scan:hover  { background: var(--accent);  color: var(--bg); }
+  .btn-ping  { border-color: var(--accent2); color: var(--accent2); }
+  .btn-ping:hover  { background: var(--accent2); color: var(--bg); }
+  .btn-block { border-color: var(--danger);  color: var(--danger);  font-size: 11px; padding: 5px 12px; }
+  .btn-block:hover { background: var(--danger); color: #fff; }
+
+  .status-bar {
+    display: flex;
+    gap: 28px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    margin-bottom: 20px;
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .status-bar .val { color: var(--accent); font-size: 16px; font-family: 'Rajdhani', sans-serif; font-weight: 700; margin-right: 4px; }
+  .status-bar .live { color: var(--accent2); }
+
+  /* ── Main grid ── */
+  .grid { display: grid; grid-template-columns: 1fr 380px; gap: 16px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,229,255,0.04);
+  }
+  .panel-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .panel-badge {
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 10px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    padding: 2px 8px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Host table ── */
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--dim);
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+  }
+  tbody tr {
+    border-bottom: 1px solid rgba(13,42,58,0.6);
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  tbody tr:hover { background: rgba(0,229,255,0.04); }
+  tbody td { padding: 10px 14px; vertical-align: middle; }
+
+  .ip-cell { color: var(--accent); font-size: 13px; }
+  .mac-cell { color: var(--dim); font-size: 11px; }
+  .host-cell { color: var(--text); font-size: 11px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .ping-cell { text-align: right; }
+  .ping-bar-wrap { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .ping-bar { height: 4px; background: var(--border); width: 60px; overflow: hidden; }
+  .ping-fill { height: 100%; transition: width 0.4s ease; }
+  .ping-val { font-size: 11px; min-width: 52px; text-align: right; }
+
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; margin-right: 6px;
+  }
+  .dot-up   { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); animation: pulse 2s infinite; }
+  .dot-down { background: var(--dim); }
+  .dot-warn { background: var(--warn);   box-shadow: 0 0 6px var(--warn);   animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+
+  /* Scanning animation on row */
+  .row-scanning td { color: var(--dim); }
+  .row-scanning .ip-cell { color: var(--accent); }
+
+  .risk-badge {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 10px;
+    padding: 2px 8px;
+    letter-spacing: 1px;
+    border: 1px solid;
+  }
+  .risk-ok       { color: var(--accent2); border-color: var(--accent2); }
+  .risk-watch    { color: var(--warn);    border-color: var(--warn); }
+  .risk-blocked  { color: var(--danger);  border-color: var(--danger); }
+  .risk-unknown  { color: var(--dim);     border-color: var(--dim); }
+
+  /* ── Right panel: ping log ── */
+  .ping-log { height: 380px; overflow-y: auto; }
+  .ping-log::-webkit-scrollbar { width: 4px; }
+  .ping-log::-webkit-scrollbar-track { background: var(--bg); }
+  .ping-log::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .ping-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(13,42,58,0.5);
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .ping-entry .ts { color: var(--dim); font-size: 10px; min-width: 54px; padding-top: 2px; }
+  .ping-entry .body { flex: 1; }
+  .ping-entry .addr { color: var(--accent); font-size: 12px; }
+  .ping-entry .detail { color: var(--dim); font-size: 11px; margin-top: 2px; }
+  .ping-entry .ms-ok   { color: var(--accent2); }
+  .ping-entry .ms-slow { color: var(--warn); }
+  .ping-entry .ms-dead { color: var(--danger); }
+
+  /* ── IDS reaction panel ── */
+  .ids-log { height: 230px; overflow-y: auto; }
+
+  .ids-entry {
+    padding: 9px 14px;
+    border-bottom: 1px solid rgba(13,42,58,0.5);
+    animation: slideIn 0.3s ease;
+  }
+  .ids-entry .ids-hdr { display: flex; gap: 8px; align-items: center; margin-bottom: 3px; }
+  .ids-entry .sev {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    padding: 1px 6px;
+    letter-spacing: 1px;
+  }
+  .sev-ok       { background: rgba(0,255,157,0.1); color: var(--accent2); border: 1px solid var(--accent2); }
+  .sev-info     { background: rgba(0,229,255,0.1); color: var(--accent);  border: 1px solid var(--accent); }
+  .sev-medium   { background: rgba(255,179,0,0.1);  color: var(--warn);    border: 1px solid var(--warn); }
+  .sev-high     { background: rgba(255,61,90,0.1);  color: var(--danger);  border: 1px solid var(--danger); }
+  .sev-critical { background: var(--danger);        color: #fff; border: 1px solid var(--danger); }
+
+  .ids-entry .ids-txt { font-size: 11px; color: var(--text); }
+  .ids-entry .ids-sub { font-size: 10px; color: var(--dim); margin-top: 2px; }
+
+  /* ── Radar sweep ── */
+  .radar-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .radar {
+    position: relative;
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,229,255,0.25);
+    background: radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%);
+    overflow: hidden;
+  }
+  .radar::before, .radar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0,229,255,0.12);
+    transform: scale(0.66);
+  }
+  .radar::after { transform: scale(0.33); }
+  .radar-sweep {
+    position: absolute;
+    width: 50%; height: 50%;
+    bottom: 50%; right: 50%;
+    transform-origin: bottom right;
+    background: conic-gradient(transparent 330deg, rgba(0,229,255,0.5) 360deg);
+    animation: sweep 3s linear infinite;
+  }
+  @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .radar-dot {
+    position: absolute;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent2);
+    box-shadow: 0 0 6px var(--accent2);
+    transform: translate(-50%, -50%);
+    animation: fadeRd 3s ease infinite;
+  }
+  @keyframes fadeRd {
+    0%   { opacity: 0; }
+    30%  { opacity: 1; }
+    100% { opacity: 0.3; }
+  }
+
+  .crosshair { position: absolute; inset: 0; }
+  .ch-h, .ch-v {
+    position: absolute;
+    background: rgba(0,229,255,0.12);
+  }
+  .ch-h { top: 50%; left: 0; right: 0; height: 1px; }
+  .ch-v { left: 50%; top: 0; bottom: 0; width: 1px; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--dim);
+    font-size: 12px;
+    line-height: 2;
+  }
+  .empty-state .em-icon { font-size: 32px; display: block; margin-bottom: 8px; opacity: 0.4; }
+
+  /* Scanning shimmer */
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .shimmer {
+    background: linear-gradient(90deg, var(--panel) 25%, rgba(0,229,255,0.06) 50%, var(--panel) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.6s infinite;
+  }
+
+  #scan-progress {
+    height: 2px;
+    background: var(--border);
+    overflow: hidden;
+    margin-bottom: 0;
+  }
+  #scan-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  footer {
+    text-align: center;
+    padding: 16px;
+    color: var(--dim);
+    font-size: 10px;
+    letter-spacing: 1px;
+    border-top: 1px solid var(--border);
+    margin-top: 24px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">NET<span>GUARD</span> AI</div>
+  <div style="color:var(--dim); font-size:11px; letter-spacing:1px;">NETWORK SCANNER</div>
+  <div class="breadcrumb"><a href="/">← Dashboard</a> / Scanner</div>
+</header>
+
+<!-- Progress bar (shown while scanning) -->
+<div id="scan-progress"><div id="scan-progress-fill"></div></div>
+
+<div class="container">
+
+  <!-- Controls -->
+  <div class="controls">
+    <input id="subnet-input" class="subnet-input" placeholder="192.168.1.0/24" />
+    <button class="btn btn-scan" onclick="triggerScan()">⬡ Scan Network</button>
+    <button class="btn btn-ping" onclick="pingAll()">◎ Ping All</button>
+    <span id="scan-label" style="color:var(--dim);font-size:11px;margin-left:8px;"></span>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div><span class="val" id="stat-hosts">0</span> HOSTS</div>
+    <div><span class="val live" id="stat-up">0</span> REACHABLE</div>
+    <div><span class="val" id="stat-avg">—</span> AVG PING</div>
+    <div><span class="val" id="stat-blocked" style="color:var(--danger)">0</span> BLOCKED</div>
+    <div style="margin-left:auto; color:var(--dim);" id="last-refresh">Not scanned yet</div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="grid">
+
+    <!-- Left: Host table -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Discovered Hosts</span>
+          <span class="panel-badge" id="host-count-badge">0 HOSTS</span>
+        </div>
+        <div id="host-table-wrap">
+          <div class="empty-state">
+            <span class="em-icon">📡</span>
+            Click <strong style="color:var(--accent)">Scan Network</strong> to discover hosts.<br>
+            Results appear here in real time.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Radar + logs -->
+    <div style="display:flex; flex-direction:column; gap:16px;">
+
+      <!-- Radar -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Radar</span>
+          <span id="radar-status" style="font-size:10px; color:var(--dim);">IDLE</span>
+        </div>
+        <div class="radar-wrap">
+          <div class="radar">
+            <div class="radar-sweep" id="radar-sweep"></div>
+            <div class="crosshair"><div class="ch-h"></div><div class="ch-v"></div></div>
+            <div id="radar-dots"></div>
+          </div>
+        </div>
+        <div style="text-align:center; padding: 0 16px 14px; font-size:10px; color:var(--dim);">
+          Each dot = one discovered host &nbsp;|&nbsp; <span style="color:var(--accent2)">●</span> reachable &nbsp;<span style="color:var(--dim)">●</span> down
+        </div>
+      </div>
+
+      <!-- Ping log -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Ping Log</span>
+          <span class="panel-badge" id="ping-count-badge">0</span>
+        </div>
+        <div class="ping-log" id="ping-log">
+          <div class="empty-state" style="padding:20px;">
+            <span class="em-icon" style="font-size:20px;">◎</span>
+            No pings yet.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- IDS Reaction panel (full width) -->
+  <div class="panel" style="margin-top:16px;">
+    <div class="panel-header">
+      <span class="panel-title">🛡 IDS Reaction Feed</span>
+      <span class="panel-badge" id="ids-count-badge">0 EVENTS</span>
+    </div>
+    <div class="ids-log" id="ids-log">
+      <div class="empty-state" style="padding:20px;">
+        <span class="em-icon" style="font-size:20px;">🛡</span>
+        IDS events will appear here as traffic is detected.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>NETGUARD AI — SCANNER MODULE — CONNECTED TO localhost:5000</footer>
+
+<script>
+const BASE = "";   // same origin; change to "http://localhost:5000" if separate
+
+let hostData      = {};
+let pingLog       = [];
+let idsLog        = [];
+let pingCount     = 0;
+let idsEventCount = 0;
+let isScanning    = false;
+let pollInterval  = null;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function now() {
+  return new Date().toLocaleTimeString("en-GB", {hour12: false});
+}
+
+function pingColor(ms) {
+  if (ms === null || ms === undefined) return "ms-dead";
+  if (ms < 20)  return "ms-ok";
+  if (ms < 100) return "ms-ok";
+  return "ms-slow";
+}
+
+function pingLabel(ms, reachable) {
+  if (!reachable || ms === null) return `<span class="ms-dead">timeout</span>`;
+  return `<span class="${pingColor(ms)}">${ms.toFixed(1)} ms</span>`;
+}
+
+function riskBadge(ip, blocked) {
+  if (blocked) return `<span class="risk-badge risk-blocked">BLOCKED</span>`;
+  const trusted = ["192.168.1.1","10.0.0.1","172.20.10.1","8.8.8.8","8.8.4.4"];
+  if (trusted.includes(ip)) return `<span class="risk-badge risk-ok">TRUSTED</span>`;
+  return `<span class="risk-badge risk-unknown">UNKNOWN</span>`;
+}
+
+function pingBarFill(ms) {
+  if (!ms) return `background:var(--dim); width:0%`;
+  const pct = Math.min(100, (ms / 200) * 100);
+  const col  = ms < 50  ? "var(--accent2)"
+             : ms < 100 ? "var(--warn)"
+             :             "var(--danger)";
+  return `background:${col}; width:${pct}%`;
+}
+
+// ── Render host table ─────────────────────────────────────────────────────────
+function renderHosts(hosts, scores) {
+  const wrap = document.getElementById("host-table-wrap");
+  const keys = Object.keys(hosts);
+
+  document.getElementById("host-count-badge").textContent = `${keys.length} HOSTS`;
+  document.getElementById("stat-hosts").textContent = keys.length;
+
+  let upCount = 0, totalMs = 0, msCount = 0, blockedCount = 0;
+
+  keys.forEach(ip => {
+    const h = hosts[ip];
+    if (h.reachable) upCount++;
+    if (h.ping_ms)  { totalMs += h.ping_ms; msCount++; }
+    if (scores[ip] && scores[ip].blocked) blockedCount++;
+  });
+
+  document.getElementById("stat-up").textContent      = upCount;
+  document.getElementById("stat-avg").textContent     = msCount ? `${(totalMs/msCount).toFixed(0)} ms` : "—";
+  document.getElementById("stat-blocked").textContent = blockedCount;
+
+  if (keys.length === 0) {
+    wrap.innerHTML = `<div class="empty-state"><span class="em-icon">📡</span>No hosts found. Try scanning again.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>IP Address</th>
+          <th>MAC</th>
+          <th>Hostname</th>
+          <th>Status</th>
+          <th>Ping</th>
+          <th>Risk</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${keys.sort().map(ip => {
+          const h = hosts[ip];
+          const s = scores[ip] || {};
+          const blocked = s.blocked || false;
+          const dot = blocked ? "dot-warn" : h.reachable ? "dot-up" : "dot-down";
+          const statusText = blocked ? "BLOCKED" : h.reachable ? "UP" : "DOWN";
+          return `
+            <tr onclick="pingOne('${ip}')">
+              <td class="ip-cell">${ip}</td>
+              <td class="mac-cell">${(h.mac || "unknown").toUpperCase()}</td>
+              <td class="host-cell">${h.hostname || "—"}</td>
+              <td><span class="status-dot ${dot}"></span>${statusText}</td>
+              <td class="ping-cell">
+                <div class="ping-bar-wrap">
+                  <div class="ping-bar"><div class="ping-fill" style="${pingBarFill(h.ping_ms)}"></div></div>
+                  ${pingLabel(h.ping_ms, h.reachable)}
+                </div>
+              </td>
+              <td>${riskBadge(ip, blocked)}</td>
+              <td>
+                ${!blocked
+                  ? `<button class="btn btn-block" onclick="event.stopPropagation(); blockIp('${ip}')">BLOCK</button>`
+                  : `<button class="btn" style="border-color:var(--accent2);color:var(--accent2);font-size:11px;padding:5px 12px;" onclick="event.stopPropagation(); unblockIp('${ip}')">UNBLOCK</button>`
+                }
+              </td>
+            </tr>`;
+        }).join("")}
+      </tbody>
+    </table>`;
+
+  // Radar dots
+  renderRadar(hosts);
+}
+
+// ── Radar ─────────────────────────────────────────────────────────────────────
+function renderRadar(hosts) {
+  const container = document.getElementById("radar-dots");
+  const keys = Object.keys(hosts);
+  container.innerHTML = "";
+  keys.forEach((ip, i) => {
+    const h   = hosts[ip];
+    const ang = (i / Math.max(keys.length, 1)) * 2 * Math.PI;
+    const r   = 25 + (i % 3) * 16;   // vary radius
+    const x   = 50 + r * Math.cos(ang);
+    const y   = 50 + r * Math.sin(ang);
+    const col = h.reachable ? "var(--accent2)" : "var(--dim)";
+    const d   = document.createElement("div");
+    d.className  = "radar-dot";
+    d.style.left = `${x}%`;
+    d.style.top  = `${y}%`;
+    d.style.background = col;
+    d.style.boxShadow  = h.reachable ? `0 0 6px ${col}` : "none";
+    d.title = ip;
+    container.appendChild(d);
+  });
+}
+
+// ── Ping log ──────────────────────────────────────────────────────────────────
+function addPingEntry(ip, result) {
+  pingCount++;
+  document.getElementById("ping-count-badge").textContent = pingCount;
+
+  const log  = document.getElementById("ping-log");
+  const ms   = result.ping_ms;
+  const cls  = !result.reachable ? "ms-dead" : ms < 50 ? "ms-ok" : "ms-slow";
+  const msStr = result.reachable ? `${ms ? ms.toFixed(1) : "??"} ms` : "timeout";
+  const hn   = result.hostname ? ` · ${result.hostname}` : "";
+
+  if (log.querySelector(".empty-state")) log.innerHTML = "";
+
+  const el = document.createElement("div");
+  el.className = "ping-entry";
+  el.innerHTML = `
+    <span class="ts">${now()}</span>
+    <div class="body">
+      <div class="addr">→ ${ip}${hn}</div>
+      <div class="detail"><span class="${cls}">${msStr}</span></div>
+    </div>`;
+  log.prepend(el);
+
+  // Trim to 80 entries
+  while (log.children.length > 80) log.removeChild(log.lastChild);
+}
+
+// ── IDS reaction feed ─────────────────────────────────────────────────────────
+let lastEventLen = 0;
+
+function pollIdsEvents() {
+  fetch(`${BASE}/events`)
+    .then(r => r.json())
+    .then(events => {
+      if (events.length === lastEventLen) return;
+
+      // Only show new ones
+      const newEvents = events.slice(lastEventLen);
+      lastEventLen = events.length;
+
+      const log = document.getElementById("ids-log");
+      if (log.querySelector(".empty-state") && newEvents.length > 0) log.innerHTML = "";
+
+      newEvents.reverse().forEach(ev => {
+        idsEventCount++;
+        document.getElementById("ids-count-badge").textContent = `${idsEventCount} EVENTS`;
+
+        const sev = (ev.action === "BLOCKED")   ? "sev-high"
+                  : (ev.action === "UNBLOCKED") ? "sev-info"
+                  : (ev.score >= 4)              ? "sev-medium"
+                  :                               "sev-ok";
+
+        const el = document.createElement("div");
+        el.className = "ids-entry";
+        el.innerHTML = `
+          <div class="ids-hdr">
+            <span class="sev ${sev}">${ev.action}</span>
+            <span style="color:var(--accent);font-size:11px;">${ev.ip}</span>
+            <span style="color:var(--dim);font-size:10px;margin-left:auto;">${ev.time}</span>
+          </div>
+          <div class="ids-txt">${ev.reason || "—"}</div>
+          <div class="ids-sub">score=${ev.score || 0}</div>`;
+        log.prepend(el);
+        while (log.children.length > 60) log.removeChild(log.lastChild);
+      });
+    })
+    .catch(() => {});
+}
+
+// ── Poll /api/scan ─────────────────────────────────────────────────────────────
+function pollScan() {
+  Promise.all([
+    fetch(`${BASE}/api/scan`).then(r => r.json()),
+    fetch(`${BASE}/scores`).then(r => r.json()).catch(() => ({}))
+  ]).then(([hosts, scores]) => {
+    hostData = hosts;
+    renderHosts(hosts, scores);
+    document.getElementById("last-refresh").textContent = `Last refresh: ${now()}`;
+  }).catch(() => {});
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function triggerScan() {
+  if (isScanning) return;
+  isScanning = true;
+
+  const label = document.getElementById("scan-label");
+  const fill  = document.getElementById("scan-progress-fill");
+  const radar = document.getElementById("radar-status");
+
+  label.textContent = "Scanning…";
+  radar.textContent = "SCANNING";
+  radar.style.color = "var(--accent)";
+
+  // Animate progress bar
+  let pct = 0;
+  const prog = setInterval(() => {
+    pct = Math.min(pct + 2, 90);
+    fill.style.width = pct + "%";
+  }, 100);
+
+  fetch(`${BASE}/api/scan`)
+    .then(r => r.json())
+    .then(hosts => {
+      clearInterval(prog);
+      fill.style.width = "100%";
+      setTimeout(() => { fill.style.width = "0%"; }, 800);
+      isScanning = false;
+      label.textContent = `Found ${Object.keys(hosts).length} host(s)`;
+      radar.textContent = "ACTIVE";
+      radar.style.color = "var(--accent2)";
+      pollScan();
+    })
+    .catch(err => {
+      clearInterval(prog);
+      fill.style.width = "0%";
+      isScanning = false;
+      label.textContent = "Scan failed — is the server running?";
+      radar.textContent = "ERROR";
+      radar.style.color = "var(--danger)";
+    });
+}
+
+function pingAll() {
+  fetch(`${BASE}/api/ping_all`, {method:"POST"})
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById("scan-label").textContent = `Pinging ${d.count} hosts…`;
+      // Poll results over next few seconds
+      let i = 0;
+      const t = setInterval(() => {
+        pollScan();
+        // Also pull individual ping results by re-pinging first few
+        if (++i >= 6) clearInterval(t);
+      }, 1000);
+    });
+}
+
+function pingOne(ip) {
+  fetch(`${BASE}/api/ping/${ip}`)
+    .then(r => r.json())
+    .then(result => {
+      addPingEntry(ip, result);
+      pollScan();
+    });
+}
+
+function blockIp(ip) {
+  if (!confirm(`Block ${ip}?`)) return;
+  fetch(`${BASE}/block/${ip}`, {method:"POST"})
+    .then(r => r.json())
+    .then(d => { pollScan(); pollIdsEvents(); });
+}
+
+function unblockIp(ip) {
+  fetch(`${BASE}/unblock/${ip}`, {method:"POST"})
+    .then(r => r.json())
+    .then(() => { pollScan(); pollIdsEvents(); });
+}
+
+// ── Auto-poll ─────────────────────────────────────────────────────────────────
+window.addEventListener("DOMContentLoaded", () => {
+  // Detect subnet from server
+  fetch(`${BASE}/api/scan`)
+    .then(r => r.json())
+    .then(hosts => {
+      const firstIp = Object.keys(hosts)[0];
+      if (firstIp) {
+        const parts = firstIp.split(".");
+        document.getElementById("subnet-input").value = `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+      }
+    }).catch(() => {});
+
+  // Start polling
+  pollScan();
+  pollIdsEvents();
+  setInterval(pollScan,      5000);
+  setInterval(pollIdsEvents, 2000);
+});
+</script>
+</body>
+</html>

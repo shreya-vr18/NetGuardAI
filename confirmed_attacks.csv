@@ -1,0 +1,5 @@
+src_port,dst_port,protocol,duration,pkt_count,total_bytes,mean_pkt_len,max_pkt_len,mean_iat,bytes_per_sec,label,attack_type
+53,53,6,0,0,0,0,0,0,0,1,ML Detected Anomaly
+53,53,6,0,0,0,0,0,0,0,1,ML Detected Anomaly
+53,53,6,0,0,0,0,0,0,0,1,Behavioral Anomaly
+80,31323,6,26.237534284591675,418,1080323,2584.504784688995,10434,0.06291974648583136,41174.71513450993,1,ML Detected Anomaly
