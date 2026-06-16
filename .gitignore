@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+
+capture.pcap
+
+GeoLite2-ASN.mmdb
+GeoLite2-Country.mmdb
+*.tar.gz
+
+normal_flows_buffer.csv
+confirmed_attacks.csv
