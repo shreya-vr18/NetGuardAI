@@ -29,11 +29,11 @@ _get_discovered_hosts = lambda: {}
 _ping_single          = lambda ip: {"ip": ip, "ping_ms": None, "reachable": False}
 
 # ===== HOME =================================================================
+DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dashboard")
+
 @app.route("/")
 def home():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(base_dir, "index.html")
-
+    return send_from_directory(DASHBOARD_DIR, "index.html")
 # ===== ALERTS ===============================================================
 @app.route("/alerts")
 def get_alerts():
@@ -174,11 +174,13 @@ def get_scores():
 
 @app.route("/scanner")
 def scanner_page():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(base_dir, "scanner.html")
+    return send_from_directory(DASHBOARD_DIR, "scanner.html")
 # ===== RUN ==================================================================
 def run_server():
-    app.run(port=5000, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, use_reloader=False)
 
 def start_server():
     threading.Thread(target=run_server, daemon=True).start()
+
+if __name__ == "__main__":
+    run_server()
