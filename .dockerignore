@@ -1,0 +1,11 @@
+.git
+.gitignore
+venv/
+.venv/
+__pycache__/
+*.pyc
+docs/
+tests/
+streamlit_dashboard/
+*.tar.gz
+README.md
