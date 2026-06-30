@@ -9,3 +9,10 @@ GeoLite2-Country.mmdb
 
 normal_flows_buffer.csv
 confirmed_attacks.csv
+
+venv/
+.venv/
+
+# runtime-generated trusted IP DB (seed from data/trustedip.example.json)
+data/trustedip.json
+backend/features.csv
